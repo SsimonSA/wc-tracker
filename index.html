@@ -17,7 +17,14 @@
   header .sub{font-size:12px;opacity:.85;margin-top:3px}
   .status{font-size:12px;text-align:center;padding:8px;color:#9fb0cc}
   .status .live{color:#ff6b6b;font-weight:700}
+  .controls{display:flex;align-items:center;justify-content:center;gap:8px;
+            flex-wrap:wrap;padding:10px 12px;background:#16203a;
+            border-bottom:1px solid #1c2740}
+  .controls label{font-size:13px;color:#9fb0cc}
+  .controls select{background:#0f1626;color:#e8edf6;border:1px solid #2a3a5e;
+                   border-radius:8px;padding:7px 10px;font-size:15px}
   .mine{padding:6px 12px 10px}
+  .mine .hint{font-size:13px;color:#7d8db0}
   .mine h2{font-size:11px;margin:0 0 6px;color:#9fb0cc;font-weight:600;
            text-transform:uppercase;letter-spacing:.5px}
   .chips{display:flex;flex-wrap:wrap;gap:6px}
@@ -43,6 +50,10 @@
   <h1>⚽ WORLD CUP 2026 POOL</h1>
   <div class="sub">Winner-take-all · $240 pot · only the champion's owner wins</div>
 </header>
+<div class="controls">
+  <label for="me">⭐ Highlight my teams:</label>
+  <select id="me"><option value="">— pick your name —</option></select>
+</div>
 <div class="status" id="status">Loading live scores…</div>
 <section class="mine" id="mine"></section>
 <table>
@@ -241,7 +252,6 @@ const OWNERS = {
     ]
   ]
 };
-const ME = "STEVE S";
 const ENDPOINT = "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?limit=400&dates=20260611-20260719";
 
 function norm(s){
@@ -256,22 +266,48 @@ function resolve(name){ return LUT[norm(name)] || null; }
 
 function fmtGD(s){ return s.p ? (s.gd > 0 ? "+" : "") + s.gd : "0"; }
 
-function render(pool, live){
+// --- player picker: each visitor highlights their own teams (saved per device) ---
+const sel = document.getElementById("me");
+let me = localStorage.getItem("wc-me") || "";
+for (const owner of Object.keys(OWNERS).sort()){
+  const opt = document.createElement("option");
+  opt.value = owner; opt.textContent = owner;
+  sel.appendChild(opt);
+}
+sel.value = me;
+sel.addEventListener("change", () => {
+  me = sel.value;
+  if (me) localStorage.setItem("wc-me", me); else localStorage.removeItem("wc-me");
+  paint();
+});
+
+let lastPool = [];
+
+function paint(){
   const rows = document.getElementById("rows");
   rows.innerHTML = "";
-  pool.forEach((s, i) => {
+  lastPool.forEach((s, i) => {
     const tr = document.createElement("tr");
-    if (s.owner === ME) tr.className = "mine-row";
+    if (me && s.owner === me) tr.className = "mine-row";
     tr.innerHTML =
       `<td>${i+1}</td><td class="team">${s.team}</td><td>${s.owner}</td>` +
       `<td>${s.p}</td><td>${s.w}-${s.d}-${s.l}</td>` +
       `<td>${fmtGD(s)}</td><td class="pts">${s.pts}</td>`;
     rows.appendChild(tr);
   });
-  const mine = pool.filter(s => s.owner === ME)
-    .map(s => `<span class="chip">${s.team} <b>${s.pts} pt${s.pts===1?"":"s"}</b></span>`).join("");
-  document.getElementById("mine").innerHTML =
-    `<h2>Your teams (${ME})</h2><div class="chips">${mine}</div>`;
+  const mineEl = document.getElementById("mine");
+  if (me){
+    const chips = lastPool.filter(s => s.owner === me)
+      .map(s => `<span class="chip">${s.team} <b>${s.pts} pt${s.pts===1?"":"s"}</b></span>`).join("");
+    mineEl.innerHTML = `<h2>${me}'s teams</h2><div class="chips">${chips}</div>`;
+  } else {
+    mineEl.innerHTML = `<div class="hint">👆 Pick your name above to highlight your teams.</div>`;
+  }
+}
+
+function render(pool, live){
+  lastPool = pool;
+  paint();
   const t = new Date().toLocaleTimeString([], {hour:"numeric", minute:"2-digit"});
   const liveTag = live ? ` · <span class="live">${live} live now</span>` : "";
   document.getElementById("status").innerHTML = `Updated ${t}${liveTag}`;
