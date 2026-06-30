@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>World Cup 2026 Bracket</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9A%BD%3C/text%3E%3C/svg%3E">
+<meta name="theme-color" content="#1f3864">
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+       background:#0f1626;color:#e8edf6;-webkit-text-size-adjust:100%}
+  header{background:#1f3864;padding:14px 12px;text-align:center}
+  header h1{margin:0;font-size:20px;letter-spacing:.5px}
+  header .sub{font-size:12px;opacity:.85;margin-top:3px}
+  .nav{display:flex;gap:16px;justify-content:center;background:#16203a;
+       padding:9px 12px;border-bottom:1px solid #1c2740;font-size:13px}
+  .nav a{color:#9fb0cc;text-decoration:none;font-weight:600}
+  .nav a.active{color:#ffd86b}
+  .controls{display:flex;align-items:center;justify-content:center;gap:10px;
+            flex-wrap:wrap;padding:10px 12px;background:#16203a;
+            border-bottom:1px solid #1c2740}
+  .controls label{font-size:13px;color:#9fb0cc}
+  .controls select{background:#0f1626;color:#e8edf6;border:1px solid #2a3a5e;
+                   border-radius:8px;padding:7px 10px;font-size:15px}
+  .controls .only{font-size:13px;color:#9fb0cc;display:flex;align-items:center;gap:5px}
+  .status{font-size:12px;text-align:center;padding:8px;color:#9fb0cc}
+  .status .live{color:#ff6b6b;font-weight:700}
+  /* horizontal scroll of round columns — natural swipe on phones, full bracket on desktop */
+  .scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;padding:12px}
+  .bracket{display:flex;gap:14px;align-items:flex-start;min-width:min-content}
+  .col{flex:0 0 auto;width:212px}
+  .col h3{margin:0 0 10px;font-size:12px;text-transform:uppercase;letter-spacing:.5px;
+          color:#9fb0cc;text-align:center;position:sticky;top:0}
+  .card{background:#16203a;border:1px solid #233152;border-radius:10px;
+        padding:7px 9px;margin-bottom:10px}
+  .card.minecard{border-color:#ffd86b;box-shadow:0 0 0 1px #ffd86b inset}
+  .trow{display:flex;justify-content:space-between;align-items:center;gap:6px;
+        padding:3px 0;font-size:14px}
+  .trow+.trow{border-top:1px dashed #233152}
+  .trow .tn{display:flex;flex-direction:column;line-height:1.15}
+  .trow.win .tn{font-weight:700}
+  .trow.win .sc{font-weight:700}
+  .trow.ph .tn{color:#5d6b88;font-style:italic;font-size:12px}
+  .trow.mineteam .tn{color:#ffd86b}
+  .trow .own{font-size:10px;color:#7d8db0;font-weight:600;text-transform:uppercase;
+             letter-spacing:.3px}
+  .trow.mineteam .own{color:#e9c25a}
+  .sc{min-width:18px;text-align:right;color:#cdd8ee}
+  .cfoot{margin-top:5px;font-size:10px;color:#6b7a99;text-align:center}
+  .cfoot.pens{color:#e0a85a;font-weight:600}
+  .cfoot.livegame{color:#ff6b6b;font-weight:700}
+  .empty{font-size:12px;color:#566685;text-align:center;padding:10px 0}
+  /* desktop connector-line tree (used at >=900px; narrower screens get the columns above) */
+  .thead{position:relative;height:22px;margin:0 auto 6px}
+  .thead div{position:absolute;text-align:center;font-size:11px;text-transform:uppercase;
+             letter-spacing:.5px;color:#9fb0cc;font-weight:600}
+  .tree{position:relative;margin:0 auto}
+  .tree .lines{position:absolute;top:0;left:0;pointer-events:none}
+  .tree .lines path{fill:none;stroke:#2a3a5e;stroke-width:2}
+  .tree .card{position:absolute;margin:0;height:66px;overflow:hidden;padding:5px 9px}
+  .tree .card.dim{opacity:.28}
+  .tree .trow{padding:2px 0;font-size:13px}
+  .tree .trow .tn{flex-direction:row;align-items:baseline;gap:6px}
+  .tree .own{font-size:9px}
+  .tree .cfoot{margin-top:2px}
+  footer{font-size:11px;text-align:center;color:#6b7a99;padding:14px 12px 24px;line-height:1.5}
+</style>
+</head>
+<body>
+<header>
+  <h1>⚽ WORLD CUP 2026 BRACKET</h1>
+  <div class="sub">Knockout rounds · winner-take-all · $240 pot</div>
+</header>
+<nav class="nav"><a href="index.html">← Standings</a><a class="active" href="bracket.html">Bracket</a></nav>
+<div class="controls">
+  <label for="me">⭐ My teams:</label>
+  <select id="me"><option value="">— pick your name —</option></select>
+  <label class="only"><input type="checkbox" id="onlyMine"> only my path</label>
+</div>
+<div class="status" id="status">Loading bracket…</div>
+<div class="scroll"><div id="view"></div></div>
+<footer>
+  Live from ESPN (unofficial) · auto-refreshes every 60s · your teams in gold<br>
+  Future rounds show ESPN's placeholders until the bracket is seeded.
+</footer>
+<script>
+const OWNERS = {
+  "DOUG": [
+    [
+      "Ecuador"
+    ],
+    [
+      "Ghana"
+    ],
+    [
+      "Senegal"
+    ],
+    [
+      "Argentina"
+    ]
+  ],
+  "JEFF": [
+    [
+      "Türkiye",
+      "Turkiye",
+      "Turkey"
+    ],
+    [
+      "Sweden"
+    ],
+    [
+      "Curaçao",
+      "Curacao"
+    ],
+    [
+      "United States",
+      "USA"
+    ]
+  ],
+  "VICKI": [
+    [
+      "Panama"
+    ],
+    [
+      "Ivory Coast",
+      "Côte d'Ivoire",
+      "Cote d'Ivoire"
+    ],
+    [
+      "Algeria"
+    ],
+    [
+      "England"
+    ]
+  ],
+  "VIC": [
+    [
+      "Colombia",
+      "Columbia"
+    ],
+    [
+      "Uzbekistan"
+    ],
+    [
+      "Cape Verde",
+      "Cabo Verde"
+    ],
+    [
+      "Belgium"
+    ]
+  ],
+  "AMY": [
+    [
+      "New Zealand"
+    ],
+    [
+      "Haiti"
+    ],
+    [
+      "Congo DR",
+      "DR Congo"
+    ],
+    [
+      "France"
+    ]
+  ],
+  "MARK": [
+    [
+      "Uruguay"
+    ],
+    [
+      "Austria"
+    ],
+    [
+      "Egypt"
+    ],
+    [
+      "Germany"
+    ]
+  ],
+  "BOB M": [
+    [
+      "Norway"
+    ],
+    [
+      "Saudi Arabia"
+    ],
+    [
+      "Japan"
+    ],
+    [
+      "Spain"
+    ]
+  ],
+  "STEVE S": [
+    [
+      "Morocco",
+      "Monaco"
+    ],
+    [
+      "Canada"
+    ],
+    [
+      "Jordan"
+    ],
+    [
+      "Iraq"
+    ]
+  ],
+  "SCOTT": [
+    [
+      "Scotland"
+    ],
+    [
+      "Iran",
+      "IR Iran"
+    ],
+    [
+      "Croatia"
+    ],
+    [
+      "Brazil"
+    ]
+  ],
+  "SOHAIL": [
+    [
+      "Tunisia"
+    ],
+    [
+      "Australia"
+    ],
+    [
+      "Bosnia-Herzegovina",
+      "Bosnia and Herzegovina",
+      "Bosnia Herzegovina"
+    ],
+    [
+      "Mexico"
+    ]
+  ],
+  "JOE S": [
+    [
+      "Switzerland"
+    ],
+    [
+      "South Korea",
+      "Korea Republic",
+      "S. Korea",
+      "Korea"
+    ],
+    [
+      "Paraguay"
+    ],
+    [
+      "Netherlands"
+    ]
+  ],
+  "ED": [
+    [
+      "Czechia"
+    ],
+    [
+      "Qatar"
+    ],
+    [
+      "South Africa",
+      "S. Africa"
+    ],
+    [
+      "Portugal"
+    ]
+  ]
+};
+const ENDPOINT = "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?limit=400&dates=20260611-20260719";
+
+function norm(s){
+  return (s||"").normalize("NFKD").replace(/[̀-ͯ]/g,"")
+                .toLowerCase().replace(/[^a-z0-9]/g,"");
+}
+const LUT = {};
+for (const [owner, teams] of Object.entries(OWNERS))
+  for (const variants of teams)
+    for (const v of variants) LUT[norm(v)] = [owner, variants[0]];
+function resolve(name){ return LUT[norm(name)] || null; }
+
+const KO_ROUNDS = ["Round of 32","Round of 16","Quarterfinals","Semifinals","Final"];
+function koLevel(note){
+  for (let i = 0; i < KO_ROUNDS.length; i++)
+    if (note.endsWith(KO_ROUNDS[i])) return i;
+  return -1;
+}
+
+// --- name picker (shared with the standings page via localStorage) ---
+const sel = document.getElementById("me");
+const onlyEl = document.getElementById("onlyMine");
+let me = localStorage.getItem("wc-me") || "";
+for (const owner of Object.keys(OWNERS).sort()){
+  const opt = document.createElement("option");
+  opt.value = owner; opt.textContent = owner;
+  sel.appendChild(opt);
+}
+sel.value = me;
+onlyEl.disabled = !me;
+sel.addEventListener("change", () => {
+  me = sel.value;
+  if (me) localStorage.setItem("wc-me", me); else localStorage.removeItem("wc-me");
+  onlyEl.disabled = !me;
+  if (!me) onlyEl.checked = false;
+  paint();
+});
+onlyEl.addEventListener("change", paint);
+window.addEventListener("resize", paint);
+
+let lastEvents = [];
+
+// Parse an unseeded slot ("Round of 32 5 Winner") -> [level, matchNumber].
+function placeholderFeeder(raw){
+  let m;
+  if ((m = raw.match(/^Round of 32 (\d+) Winner/)))  return [0, +m[1]];
+  if ((m = raw.match(/^Round of 16 (\d+) Winner/)))  return [1, +m[1]];
+  if ((m = raw.match(/^Quarterfinal (\d+) Winner/)))  return [2, +m[1]];
+  if ((m = raw.match(/^Semifinal (\d+) Winner/)))     return [3, +m[1]];
+  return null;
+}
+
+// Build the knockout matches grouped by round, plus each match's two feeder
+// matches and a vertical layout position. Feeders come from the placeholder
+// names while a slot is unseeded, and from winner-matching once it's filled —
+// so the (irregular) bracket topology reconstructs correctly at any stage.
+function buildModel(){
+  const byRound = [[], [], [], [], []];
+  for (const ev of lastEvents){
+    const comp = ev.competitions[0], st = comp.status.type;
+    const note = (comp.altGameNote || "").replace("FIFA World Cup, ", "");
+    const L = koLevel(note);
+    if (L < 0) continue;
+    const teams = comp.competitors.map(c => {
+      const r = resolve(c.team.displayName);
+      return {name: r ? r[1] : c.team.displayName, raw: c.team.displayName,
+              owner: r ? r[0] : null, ph: !r, score: c.score, win: !!c.winner,
+              mine: !!(me && r && r[0] === me)};
+    });
+    byRound[L].push({id:+ev.id, level:L, st, date:ev.date, teams,
+                     mineHere: teams.some(t => t.mine)});
+  }
+  for (const r of byRound) r.sort((a, b) => a.id - b.id);
+  const ok = byRound[0].length===16 && byRound[1].length===8 &&
+             byRound[2].length===4 && byRound[3].length===2 && byRound[4].length===1;
+  if (ok){
+    const numMap = byRound.map(r => { const m = {}; r.forEach((mt,i) => m[i+1] = mt); return m; });
+    for (let L = 1; L < 5; L++)
+      for (const mt of byRound[L])
+        mt.feeders = mt.teams.map(t => {
+          if (t.ph){ const f = placeholderFeeder(t.raw); return f ? numMap[f[0]][f[1]] : null; }
+          const nT = norm(t.name);
+          return byRound[L-1].find(pm => pm.teams.some(pt => pt.win && norm(pt.name) === nT)) || null;
+        });
+    const leaves = [];
+    (function visit(mt){
+      if (mt.level === 0){ leaves.push(mt); return; }
+      (mt.feeders || []).forEach(f => { if (f) visit(f); });
+    })(byRound[4][0]);
+    const GAP = 80;
+    leaves.forEach((mt, i) => mt.center = i*GAP + GAP/2);
+    for (let L = 1; L < 5; L++)
+      for (const mt of byRound[L]){
+        const cs = (mt.feeders || []).filter(Boolean).map(f => f.center);
+        mt.center = cs.length ? cs.reduce((a,b) => a+b, 0)/cs.length : 0;
+      }
+    return {byRound, ok:true, height: 16*GAP + 8};
+  }
+  return {byRound, ok:false};
+}
+
+function cardHtml(mt){
+  const state = mt.st.state, pens = (mt.st.detail || "").toLowerCase().includes("pen");
+  const rows = mt.teams.map(t => {
+    const cls = [t.ph ? "ph" : "", t.win ? "win" : "", t.mine ? "mineteam" : ""].join(" ");
+    const own = t.owner ? `<span class="own">${t.owner}</span>` : "";
+    const sc = state === "pre" ? "" : `<span class="sc">${t.score}</span>`;
+    return `<div class="trow ${cls}"><span class="tn">${t.name}${own}</span>${sc}</div>`;
+  }).join("");
+  let foot, fcls = "";
+  if (state === "post"){ foot = mt.st.detail || "Final"; if (pens) fcls = "pens"; }
+  else if (state === "in"){ foot = "LIVE " + (mt.st.detail || ""); fcls = "livegame"; }
+  else { foot = mt.st.detail || ""; }
+  return rows + `<div class="cfoot ${fcls}">${foot}</div>`;
+}
+
+function renderColumns(model){
+  const onlyMine = onlyEl.checked && me;
+  let html = `<div class="bracket">`;
+  model.byRound.forEach((matches, L) => {
+    html += `<div class="col"><h3>${KO_ROUNDS[L]}</h3>`;
+    let shown = 0;
+    for (const mt of matches){
+      if (onlyMine && !mt.mineHere) continue;
+      shown++;
+      html += `<div class="card${mt.mineHere ? " minecard" : ""}">${cardHtml(mt)}</div>`;
+    }
+    if (!shown) html += `<div class="empty">${onlyMine ? "— none —" : "(scheduled)"}</div>`;
+    html += `</div>`;
+  });
+  document.getElementById("view").innerHTML = html + `</div>`;
+}
+
+function renderTree(model){
+  const onlyMine = onlyEl.checked && me;
+  const COLW = 212, CARDW = 188, CARDH = 66, W = 5*COLW;
+  let hdr = `<div class="thead" style="width:${W}px">`;
+  KO_ROUNDS.forEach((r, L) => hdr += `<div style="left:${L*COLW}px;width:${CARDW}px">${r}</div>`);
+  hdr += `</div>`;
+  let paths = "";
+  for (let L = 1; L < 5; L++)
+    for (const mt of model.byRound[L]){
+      const px = L*COLW, py = mt.center;
+      (mt.feeders || []).forEach(f => {
+        if (!f) return;
+        const cx = (L-1)*COLW + CARDW, cy = f.center, mx = (cx + px)/2;
+        paths += `<path d="M${cx} ${cy} H${mx} V${py} H${px}" />`;
+      });
+    }
+  let cards = "";
+  for (let L = 0; L < 5; L++)
+    for (const mt of model.byRound[L]){
+      const dim = onlyMine && !mt.mineHere ? " dim" : "";
+      cards += `<div class="card${mt.mineHere ? " minecard" : ""}${dim}" `
+             + `style="left:${L*COLW}px;top:${mt.center - CARDH/2}px;width:${CARDW}px">`
+             + `${cardHtml(mt)}</div>`;
+    }
+  document.getElementById("view").innerHTML = hdr +
+    `<div class="tree" style="width:${W}px;height:${model.height}px">` +
+    `<svg class="lines" width="${W}" height="${model.height}">${paths}</svg>${cards}</div>`;
+}
+
+function paint(){
+  const model = buildModel();
+  if (model.ok && window.innerWidth >= 900) renderTree(model);
+  else renderColumns(model);
+}
+
+async function load(){
+  try{
+    const resp = await fetch(ENDPOINT, {cache:"no-store"});
+    const data = await resp.json();
+    lastEvents = data.events || [];
+    let live = 0, champ = null;
+    for (const ev of lastEvents){
+      const comp = ev.competitions[0], st = comp.status.type;
+      if (st.state === "in") live++;
+      const note = (comp.altGameNote || "").replace("FIFA World Cup, ", "");
+      if (st.state === "post" && koLevel(note) === KO_ROUNDS.length - 1){
+        const w = comp.competitors.find(c => c.winner);
+        if (w){ const r = resolve(w.team.displayName); champ = r ? `${r[1]} (${r[0]})` : w.team.displayName; }
+      }
+    }
+    paint();
+    const t = new Date().toLocaleTimeString([], {hour:"numeric", minute:"2-digit"});
+    const tag = champ ? ` · <span class="live">🏆 ${champ} wins the pot!</span>`
+                      : (live ? ` · <span class="live">${live} live now</span>` : "");
+    document.getElementById("status").innerHTML = `Updated ${t}${tag}`;
+  } catch (e){
+    document.getElementById("status").textContent =
+      "Couldn't reach ESPN — will retry in 60s…";
+  }
+}
+load();
+setInterval(load, 60000);
+</script>
+</body>
+</html>

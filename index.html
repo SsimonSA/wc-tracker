@@ -15,6 +15,10 @@
   header{background:#1f3864;padding:14px 12px;text-align:center}
   header h1{margin:0;font-size:20px;letter-spacing:.5px}
   header .sub{font-size:12px;opacity:.85;margin-top:3px}
+  .nav{display:flex;gap:16px;justify-content:center;background:#16203a;
+       padding:9px 12px;border-bottom:1px solid #1c2740;font-size:13px}
+  .nav a{color:#9fb0cc;text-decoration:none;font-weight:600}
+  .nav a.active{color:#ffd86b}
   .status{font-size:12px;text-align:center;padding:8px;color:#9fb0cc}
   .status .live{color:#ff6b6b;font-weight:700}
   .controls{display:flex;align-items:center;justify-content:center;gap:8px;
@@ -42,6 +46,25 @@
   tbody tr.mine-row td{border-bottom-color:#e6d9a8;font-weight:600}
   .team{font-weight:600}
   .pts{font-weight:700;font-size:15px}
+  .ssub{font-size:11px;color:#7d8db0;font-weight:400;margin-top:2px;line-height:1.3}
+  .ssub.dead{color:#6b6b6b}
+  /* in the table the next-match detail is collapsed: hover (desktop) or tap (mobile) reveals it */
+  #rows .ssub{display:none}
+  #rows tr:hover .ssub,#rows tr.expanded .ssub{display:block}
+  #rows .team{cursor:pointer}
+  .caret{display:inline-block;margin-left:5px;color:#6b7a99;font-weight:700;font-size:12px;
+         transition:transform .15s}
+  #rows tr:hover .caret,#rows tr.expanded .caret{transform:rotate(90deg);color:#9fb0cc}
+  .bdg{display:inline-block;margin-left:6px;font-size:10px;font-weight:700;
+       padding:1px 6px;border-radius:6px;vertical-align:middle;letter-spacing:.3px}
+  .bdg.live{background:#1f7a4d;color:#dffff0}
+  .bdg.out{background:#3a3a3a;color:#b6b6b6}
+  .bdg.champ{background:#ffd86b;color:#1a1a1a}
+  tbody tr.out{opacity:.55}
+  tbody tr.out .team .tname{text-decoration:line-through;text-decoration-color:#7a7a7a}
+  tbody tr.mine-row.out{opacity:.7}
+  .chip{display:inline-block}
+  .chip .ssub{margin-top:3px}
   footer{font-size:11px;text-align:center;color:#6b7a99;padding:14px 12px 24px;line-height:1.5}
 </style>
 </head>
@@ -50,6 +73,7 @@
   <h1>⚽ WORLD CUP 2026 POOL</h1>
   <div class="sub">Winner-take-all · $240 pot · only the champion's owner wins</div>
 </header>
+<nav class="nav"><a class="active" href="index.html">Standings</a><a href="bracket.html">Bracket →</a></nav>
 <div class="controls">
   <label for="me">⭐ Highlight my teams:</label>
   <select id="me"><option value="">— pick your name —</option></select>
@@ -266,6 +290,70 @@ function resolve(name){ return LUT[norm(name)] || null; }
 
 function fmtGD(s){ return s.p ? (s.gd > 0 ? "+" : "") + s.gd : "0"; }
 
+// --- knockout status + next-match per team ---------------------------------
+// Uses ESPN's winner/advance flags (correct even when a tie is decided on
+// penalties) plus each team's earliest upcoming fixture for the "next match"
+// subline. Returns {team: {badge, cls, sub, dead, champ}}.
+const KO_ROUNDS = ["Round of 32","Round of 16","Quarterfinals","Semifinals","Final"];
+const KO_SHORT  = {"Round of 32":"R32","Round of 16":"R16","Quarterfinals":"QF",
+                   "Semifinals":"SF","Final":"Final"};
+function koLevel(note){
+  for (let i = 0; i < KO_ROUNDS.length; i++)
+    if (note.endsWith(KO_ROUNDS[i])) return i;
+  return -1;
+}
+function buildInfo(events, teams){
+  const info = {};
+  for (const t of teams) info[t] = {inKO:false, champ:false, exit:null, next:null, advMax:-1};
+  for (const ev of events){
+    const comp = ev.competitions[0], st = comp.status.type, state = st.state;
+    const note = (comp.altGameNote || "").replace("FIFA World Cup, ", "");
+    const L = koLevel(note);
+    const parts = comp.competitors.map(c => ({r:resolve(c.team.displayName),
+                                              raw:c.team.displayName, c}));
+    for (const p of parts){
+      if (!p.r) continue;
+      const team = p.r[1];
+      if (!(team in info)) continue;
+      const opp = parts.find(x => x !== p);
+      const oppName = opp ? (opp.r ? opp.r[1] : opp.raw) : "TBD";
+      if (L >= 0) info[team].inKO = true;
+      if (state === "pre" || state === "in"){
+        const cand = {short:KO_SHORT[note] || note, opp:oppName, when:st.detail, date:ev.date};
+        if (!info[team].next || ev.date < info[team].next.date) info[team].next = cand;
+      } else if (state === "post" && L >= 0){
+        if (p.c.advance || p.c.winner){
+          info[team].advMax = Math.max(info[team].advMax, L);
+          if (L === KO_ROUNDS.length - 1) info[team].champ = true;
+        } else {
+          const pens = (st.detail || "").toLowerCase().includes("pen");
+          info[team].exit = {short:KO_SHORT[note] || note, by:oppName, pens};
+        }
+      }
+    }
+  }
+  for (const t of teams){
+    const o = info[t];
+    if (o.champ){
+      o.badge = "🏆 CHAMP"; o.cls = "champ"; o.sub = "Won the World Cup 🎉"; o.dead = false;
+    } else if (o.exit){
+      o.badge = "OUT"; o.cls = "out"; o.dead = true;
+      o.sub = `Out — lost ${o.exit.short}${o.exit.by ? " to " + o.exit.by : ""}`
+            + (o.exit.pens ? " (pens)" : "");
+    } else if (!o.inKO){
+      o.badge = "OUT"; o.cls = "out"; o.dead = true; o.sub = "Out — group stage";
+    } else if (o.next){
+      o.badge = o.next.short; o.cls = "live"; o.dead = false;
+      o.sub = `Next: ${o.next.short} · vs ${o.next.opp} · ${o.next.when}`;
+    } else {
+      const nr = KO_ROUNDS[o.advMax + 1];
+      o.badge = nr ? KO_SHORT[nr] : "ALIVE"; o.cls = "live"; o.dead = false;
+      o.sub = "Through — next opponent TBD";
+    }
+  }
+  return info;
+}
+
 // --- player picker: each visitor highlights their own teams (saved per device) ---
 const sel = document.getElementById("me");
 let me = localStorage.getItem("wc-me") || "";
@@ -283,22 +371,43 @@ sel.addEventListener("change", () => {
 
 let lastPool = [];
 
+// tap-to-toggle the next-match detail; remembered by team across the 60s refresh
+const expanded = new Set();
+document.getElementById("rows").addEventListener("click", (e) => {
+  const tr = e.target.closest("tr");
+  if (!tr || !tr.dataset.team) return;
+  const t = tr.dataset.team;
+  if (expanded.has(t)) expanded.delete(t); else expanded.add(t);
+  tr.classList.toggle("expanded");
+});
+
 function paint(){
   const rows = document.getElementById("rows");
   rows.innerHTML = "";
   lastPool.forEach((s, i) => {
     const tr = document.createElement("tr");
-    if (me && s.owner === me) tr.className = "mine-row";
+    const x = s._info || {};
+    tr.dataset.team = s.team;
+    if (expanded.has(s.team)) tr.classList.add("expanded");
+    if (me && s.owner === me) tr.classList.add("mine-row");
+    if (x.dead) tr.classList.add("out");
+    const badge = x.badge ? ` <span class="bdg ${x.cls}">${x.badge}</span>` : "";
+    const caret = x.sub ? ` <span class="caret">›</span>` : "";
+    const sub = x.sub ? `<div class="ssub ${x.dead ? "dead" : ""}">${x.sub}</div>` : "";
     tr.innerHTML =
-      `<td>${i+1}</td><td class="team">${s.team}</td><td>${s.owner}</td>` +
+      `<td>${i+1}</td><td class="team"><span class="tname">${s.team}</span>${badge}${caret}${sub}</td><td>${s.owner}</td>` +
       `<td>${s.p}</td><td>${s.w}-${s.d}-${s.l}</td>` +
       `<td>${fmtGD(s)}</td><td class="pts">${s.pts}</td>`;
     rows.appendChild(tr);
   });
   const mineEl = document.getElementById("mine");
   if (me){
-    const chips = lastPool.filter(s => s.owner === me)
-      .map(s => `<span class="chip">${s.team} <b>${s.pts} pt${s.pts===1?"":"s"}</b></span>`).join("");
+    const chips = lastPool.filter(s => s.owner === me).map(s => {
+      const x = s._info || {};
+      const badge = x.badge ? `<span class="bdg ${x.cls}">${x.badge}</span>` : "";
+      const sub = x.sub ? `<div class="ssub ${x.dead ? "dead" : ""}">${x.sub}</div>` : "";
+      return `<span class="chip"><b>${s.team}</b> ${badge}${sub}</span>`;
+    }).join("");
     mineEl.innerHTML = `<h2>${me}'s teams</h2><div class="chips">${chips}</div>`;
   } else {
     mineEl.innerHTML = `<div class="hint">👆 Pick your name above to highlight your teams.</div>`;
@@ -309,8 +418,10 @@ function render(pool, live){
   lastPool = pool;
   paint();
   const t = new Date().toLocaleTimeString([], {hour:"numeric", minute:"2-digit"});
-  const liveTag = live ? ` · <span class="live">${live} live now</span>` : "";
-  document.getElementById("status").innerHTML = `Updated ${t}${liveTag}`;
+  const champ = pool.find(s => s._info && s._info.champ);
+  const tag = champ ? ` · <span class="live">🏆 ${champ.team} (${champ.owner}) wins the $240 pot!</span>`
+                    : (live ? ` · <span class="live">${live} live now</span>` : "");
+  document.getElementById("status").innerHTML = `Updated ${t}${tag}`;
 }
 
 async function load(){
@@ -346,6 +457,8 @@ async function load(){
     const pool = Object.values(stats);
     for (const s of pool){ s.pts = 3*s.w + s.d; s.gd = s.gf - s.ga; }
     pool.sort((a,b) => b.pts-a.pts || b.gd-a.gd || b.gf-a.gf || a.team.localeCompare(b.team));
+    const info = buildInfo(events, Object.keys(stats));
+    for (const s of pool) s._info = info[s.team];
     render(pool, live);
   } catch (e){
     document.getElementById("status").textContent =
