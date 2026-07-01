@@ -1,0 +1,6 @@
+# Generated Excel outputs (rebuilt on every run; safe to delete)
+*.xlsx
+
+# Python
+__pycache__/
+*.pyc
