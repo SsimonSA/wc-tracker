@@ -456,9 +456,14 @@ async function load(){
     }
     const pool = Object.values(stats);
     for (const s of pool){ s.pts = 3*s.w + s.d; s.gd = s.gf - s.ga; }
-    pool.sort((a,b) => b.pts-a.pts || b.gd-a.gd || b.gf-a.gf || a.team.localeCompare(b.team));
     const info = buildInfo(events, Object.keys(stats));
     for (const s of pool) s._info = info[s.team];
+    // Sort in tiers: teams still alive first, then teams knocked out in the
+    // knockout rounds (reached the KO but lost), then teams that never made
+    // the knockouts (group-stage exits). Within each tier, standard soccer
+    // order: Points -> goal diff -> goals for.
+    const tier = s => { const x = s._info || {}; if (!x.dead) return 0; return x.inKO ? 1 : 2; };
+    pool.sort((a,b) => tier(a)-tier(b) || b.pts-a.pts || b.gd-a.gd || b.gf-a.gf || a.team.localeCompare(b.team));
     render(pool, live);
   } catch (e){
     document.getElementById("status").textContent =
